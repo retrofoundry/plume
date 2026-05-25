@@ -21,6 +21,8 @@ cmake_dependent_option(PLUME_SDL_VULKAN_ENABLED "Enable SDL Vulkan integration" 
 cmake_dependent_option(PLUME_D3D12_AGILITY_SDK_ENABLED "Enable D3D12 Agility SDK" OFF WIN32 OFF)
 cmake_dependent_option(PLUME_APPLE_RETINA_ENABLED "Enable Apple Retina display support" ON APPLE ON)
 option(PLUME_BUILD_EXAMPLES "Build example applications" OFF)
+option(PLUME_BUILD_BENCH "Build benchmark suite" OFF)
+option(PLUME_BUILD_TEST "Build headless correctness test suite" OFF)
 
 # Windows-specific definitions
 if(WIN32)
@@ -49,6 +51,7 @@ message(STATUS "Plume - Building with backends: Vulkan=1 Metal=${APPLE} D3D12=${
 message(STATUS "Plume - SDL Vulkan integration: ${PLUME_SDL_VULKAN_ENABLED}")
 message(STATUS "Plume - D3D12 Agility SDK: ${PLUME_D3D12_AGILITY_SDK_ENABLED}")
 message(STATUS "Plume - Building examples: ${PLUME_BUILD_EXAMPLES}")
+message(STATUS "Plume - Building benchmarks: ${PLUME_BUILD_BENCH}")
 
 # Basic source files that are always included
 set(PLUME_SOURCES
@@ -114,4 +117,12 @@ endif()
 # Add examples if requested
 if(PLUME_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+if(PLUME_BUILD_BENCH)
+    add_subdirectory(bench)
+endif()
+
+if(PLUME_BUILD_TEST)
+    add_subdirectory(test)
 endif()

@@ -1,0 +1,125 @@
+name: harness
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # Metal: builds the full harness (HLSL shader pipeline via brew spirv-cross + the
+  # runner's Metal Toolchain) and runs the full correctness suite on a real Metal GPU,
+  # plus a benchmark smoke run.
+  correctness-metal:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: macos-plume-harness-ccache
+
+      - name: Install dependencies
+        run: brew install ninja spirv-cross
+
+      - name: Configure
+        run: |
+          export PATH="/usr/local/opt/ccache/libexec:$PATH"
+          SPIRV_CROSS_PREFIX="$(brew --prefix spirv-cross)"
+          cmake -G Ninja -S . -B cmake-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPLUME_BUILD_BENCH=ON \
+            -DPLUME_BUILD_TEST=ON \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DPLUME_SPIRV_CROSS_LIB_DIR="${SPIRV_CROSS_PREFIX}/lib" \
+            -DPLUME_SPIRV_CROSS_INCLUDE_DIR="${SPIRV_CROSS_PREFIX}/include/spirv_cross"
+
+      - name: Build harness
+        run: |
+          cmake --build cmake-build --target plume_test
+          cmake --build cmake-build --target plume_bench
+
+      - name: Correctness gate (Metal)
+        run: ./cmake-build/bin/plume_test
+
+      - name: Benchmark smoke run
+        run: ./cmake-build/bin/plume_bench --suite encoding --iterations 5
+
+  # Vulkan: a genuine (non-Metal) backend test on Linux, using Mesa's lavapipe
+  # software driver (the GitHub Linux runners have no GPU). DXC compiles the HLSL
+  # workload shaders straight to SPIR-V (no spirv-cross/Metal step needed off Apple),
+  # so this runs the FULL correctness suite on a real Vulkan driver. plume_test
+  # selects Vulkan automatically on non-Apple platforms.
+  correctness-vulkan:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: linux-plume-harness-ccache
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang libx11-dev \
+            mesa-vulkan-drivers libvulkan1 vulkan-tools
+
+      - name: Vulkan diagnostics
+        run: vulkaninfo --summary || true
+
+      - name: Configure
+        run: |
+          export PATH="/usr/lib/ccache:$PATH"
+          cmake -G Ninja -S . -B cmake-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPLUME_BUILD_TEST=ON \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache
+
+      - name: Build harness
+        run: cmake --build cmake-build --target plume_test
+
+      - name: Correctness gate (Vulkan / lavapipe)
+        run: ./cmake-build/bin/plume_test
+
+  # D3D12: a Windows correctness run with no physical GPU, using Microsoft's WARP
+  # software rasterizer (the D3D12 analog of the Linux/lavapipe Vulkan job). DXC compiles
+  # the HLSL workloads to DXIL; the D3D12 backend falls back to WARP when no hardware
+  # adapter is present (forced here via PLUME_D3D12_WARP). Runs the full correctness
+  # suite; software, so correctness only.
+  correctness-d3d12:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: >
+          cmake -G "Visual Studio 17 2022" -A x64 -S . -B cmake-build
+          -DPLUME_BUILD_TEST=ON
+
+      - name: Build harness
+        run: cmake --build cmake-build --config Release --target plume_test
+
+      - name: Correctness gate (D3D12 / WARP)
+        run: ./cmake-build/bin/Release/plume_test.exe
+        env:
+          PLUME_D3D12_WARP: "1"
