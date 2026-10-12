@@ -3029,12 +3029,16 @@ namespace plume {
             // Calculate block size based on source texture format
             const uint32_t blockWidth = RenderFormatBlockWidth(srcTexture->desc.format);
 
-            const MTL::Size size = { dstLocation.placedFootprint.width, dstLocation.placedFootprint.height, dstLocation.placedFootprint.depth };
+            const uint32_t mipLevel = srcLocation.subresource.mipLevel;
+            const MTL::Size size = (srcBox != nullptr)
+                ? MTL::Size { NS::UInteger(srcBox->right - srcBox->left), NS::UInteger(srcBox->bottom - srcBox->top), NS::UInteger(srcBox->back - srcBox->front) }
+                : MTL::Size { std::max(srcTexture->desc.width >> mipLevel, 1U), std::max(srcTexture->desc.height >> mipLevel, 1U), std::max(srcTexture->desc.depth >> mipLevel, 1U) };
 
             const uint32_t horizontalBlocks = (dstLocation.placedFootprint.rowWidth + blockWidth - 1) / blockWidth;
             const uint32_t verticalBlocks = (dstLocation.placedFootprint.height + blockWidth - 1) / blockWidth;
             const uint32_t bytesPerRow = horizontalBlocks * RenderFormatSize(srcTexture->desc.format);
             const uint32_t bytesPerImage = bytesPerRow * verticalBlocks;
+            const uint64_t dstOffset = dstLocation.placedFootprint.offset + dstZ * bytesPerImage + (dstY / blockWidth) * bytesPerRow + (dstX / blockWidth) * RenderFormatSize(srcTexture->desc.format);
 
             const MTL::Origin srcOrigin = (srcBox != nullptr)
                 ? MTL::Origin { NS::UInteger(srcBox->left), NS::UInteger(srcBox->top), NS::UInteger(srcBox->front) }
@@ -3048,7 +3052,7 @@ namespace plume {
                 srcOrigin,
                 size,
                 dstBuffer->mtl,
-                dstLocation.placedFootprint.offset,
+                dstOffset,
                 bytesPerRow,
                 bytesPerImage
             );

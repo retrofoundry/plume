@@ -3240,8 +3240,12 @@ namespace plume {
             assert(srcTexture != nullptr);
 
             const uint32_t blockWidth = RenderFormatBlockWidth(srcTexture->desc.format);
+            const uint32_t blockSize = RenderFormatSize(srcTexture->desc.format);
+            const uint32_t bytesPerRow = ((dstLocation.placedFootprint.rowWidth + blockWidth - 1) / blockWidth) * blockSize;
+            const uint32_t bytesPerImage = bytesPerRow * ((dstLocation.placedFootprint.height + blockWidth - 1) / blockWidth);
+            const uint32_t mipLevel = srcLocation.subresource.mipLevel;
             VkBufferImageCopy imageCopy = {};
-            imageCopy.bufferOffset = dstLocation.placedFootprint.offset;
+            imageCopy.bufferOffset = dstLocation.placedFootprint.offset + dstZ * bytesPerImage + (dstY / blockWidth) * bytesPerRow + (dstX / blockWidth) * blockSize;
             imageCopy.bufferRowLength = ((dstLocation.placedFootprint.rowWidth + blockWidth - 1) / blockWidth) * blockWidth;
             imageCopy.bufferImageHeight = ((dstLocation.placedFootprint.height + blockWidth - 1) / blockWidth) * blockWidth;
             imageCopy.imageSubresource.aspectMask = toAspectFlags(srcTexture->desc.format, srcTexture->desc.flags);
@@ -3251,9 +3255,9 @@ namespace plume {
             imageCopy.imageOffset.x = srcBox != nullptr ? srcBox->left : 0;
             imageCopy.imageOffset.y = srcBox != nullptr ? srcBox->top : 0;
             imageCopy.imageOffset.z = srcBox != nullptr ? srcBox->front : 0;
-            imageCopy.imageExtent.width = dstLocation.placedFootprint.width;
-            imageCopy.imageExtent.height = dstLocation.placedFootprint.height;
-            imageCopy.imageExtent.depth = dstLocation.placedFootprint.depth;
+            imageCopy.imageExtent.width = srcBox != nullptr ? uint32_t(srcBox->right - srcBox->left) : std::max(srcTexture->desc.width >> mipLevel, 1U);
+            imageCopy.imageExtent.height = srcBox != nullptr ? uint32_t(srcBox->bottom - srcBox->top) : std::max(srcTexture->desc.height >> mipLevel, 1U);
+            imageCopy.imageExtent.depth = srcBox != nullptr ? uint32_t(srcBox->back - srcBox->front) : std::max(srcTexture->desc.depth >> mipLevel, 1U);
             vkCmdCopyImageToBuffer(vk, srcTexture->vk, toImageLayout(srcTexture->textureLayout), dstBuffer->vk, 1, &imageCopy);
         }
         else {
