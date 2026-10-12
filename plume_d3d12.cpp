@@ -3148,6 +3148,7 @@ namespace plume {
         psoDesc.DepthStencilState.BackFace.StencilDepthFailOp = toD3D12(desc.stencilBackFace.depthFailOp);
         psoDesc.DepthStencilState.BackFace.StencilPassOp = toD3D12(desc.stencilBackFace.passOp);
         psoDesc.DepthStencilState.BackFace.StencilFunc = toD3D12(desc.stencilBackFace.compareFunction);
+        stencilRef = desc.stencilReference;
         psoDesc.NumRenderTargets = desc.renderTargetCount;
         psoDesc.BlendState.AlphaToCoverageEnable = desc.alphaToCoverageEnabled;
 
